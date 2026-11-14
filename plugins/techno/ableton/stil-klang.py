@@ -85,7 +85,8 @@ def kick(p, stil, rng):
     x = tb.kick(a)
     t = np.arange(len(x)) / SR
     # Knack bei 1,5 kHz plus Rauschen 2-8 kHz: ohne ihn legt Demucs eine Sinus-Kick in den Bass-Stem (Probe 14.11.)
-    knack = rng.uniform(.2, .8) * np.sin(2 * np.pi * 1500 * t) * np.exp(-t / .004)
+    # mehr Knack statt mehr Drive fuer helle Kicks: Drive ueber 6 verschiebt die gemessene Kick-Tonhoehe im Track auf einen Oberton
+    knack = rng.uniform(.2, 1.6) * np.sin(2 * np.pi * 1500 * t) * np.exp(-t / .004)
     rausch = filt(rng.standard_normal(len(t)), 'band', [2000, 8000])
     x = x + knack + rng.uniform(.15, .7) * rausch / np.abs(rausch).max() * np.exp(-t / .003)
     return x, {'f_end_hz': round(a.f_end, 1), 'drive': a.drive}
@@ -160,8 +161,9 @@ def messen(x, rolle):
     return m
 
 
-def erzeugen(stil, rolle, seed=None, ton=None, p=None):
-    """Gibt (Signal, Messwerte, Parameter) der besten von KANDIDATEN Varianten zurueck; ton = MIDI-Note fuer tonale Rollen."""
+def erzeugen(stil, rolle, seed=None, ton=None, p=None, ziel_anders=None):
+    """Gibt (Signal, Messwerte, Parameter) der besten von KANDIDATEN Varianten zurueck; ton = MIDI-Note fuer tonale Rollen.
+    ziel_anders ueberschreibt einzelne Zielwerte (z. B. fuer den Einsatz im Track)."""
     p = p or profil(stil)
     rng = np.random.default_rng(seed)
     if ton is None:
@@ -170,7 +172,7 @@ def erzeugen(stil, rolle, seed=None, ton=None, p=None):
     bauer = {'kick': lambda: kick(p, stil, rng), 'rumble': lambda: rumble(p, stil, rng, ton), 'hat': lambda: hat(p, stil, rng),
              'openhat': lambda: hat(p, stil, rng, offen=True), 'perc': lambda: perc(p, stil, rng),
              'synth': lambda: synth(p, stil, rng, ton), 'pad': lambda: pad(p, stil, rng, ton)}[rolle]
-    ziel = ziele(stil, p).get(rolle, {})
+    ziel = {**ziele(stil, p).get(rolle, {}), **(ziel_anders or {})}
     beste = None
     for _ in range(KANDIDATEN if ziel else 1):
         x, par = bauer()

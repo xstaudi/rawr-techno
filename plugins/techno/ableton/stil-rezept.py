@@ -28,6 +28,7 @@ NOTEN = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 # Stufen je Stil (Halbtoene ueber dem Grundton); raw nutzt die kleine Sekunde fuer den duesteren Klang
 STUFEN = {'raw': [0, 0, 1, 7, 12], 'deep': [0, 3, 7, 10], 'hypnotic': [0, 0, 3, 7, 10, 12]}
 RUMBLE_DRIVE = {'raw': 3, 'deep': 1.5, 'hypnotic': 2}
+KICK_DEMUCS_VERLUST_DB = 5
 # Fills, Loops mit Tempo, Effekte und Gitarren liegen auch in One-Shot-Ordnern, taugen aber nicht als Motiv-Ton
 UNPASSEND = re.compile(r'fill|guitar|impact|downlifter|uplifter|swell|riser|bpm|misc|vocal|loop|\bfx\b', re.I)
 
@@ -180,7 +181,9 @@ def rezept(stil, seed, bpm=None, quelle='library', minuten=None, nur=None, takte
     def klang(rolle, ziel, synth_rolle, ton=None):
         if quelle == 'library':
             return waehle(rolle, ziel, rng)
-        x, m, par = kl.erzeugen(stil, synth_rolle, seed=int(rng.integers(1_000_000)), ton=ton, p=p)
+        # Im Track misst die Pruefung die Synth-Kick nach Demucs 4-7 dB dumpfer als einzeln (raw s2, raw s125, deep s2 v4)
+        anders = {'obertoene_db': ziel['obertoene_db'] + KICK_DEMUCS_VERLUST_DB} if synth_rolle == 'kick' else None
+        x, m, par = kl.erzeugen(stil, synth_rolle, seed=int(rng.integers(1_000_000)), ton=ton, p=p, ziel_anders=anders)
         datei = ordner / 'Sounds' / f'{name} {synth_rolle}.wav'
         tb.schreiben(x, str(datei))
         return {'pfad': str(datei), **m, **({'f_end_hz': par['f_end_hz']} if 'f_end_hz' in par else {})}

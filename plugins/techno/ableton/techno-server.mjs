@@ -36811,7 +36811,7 @@ function profilKennzahlen(stil) {
 var HIER2 = dirname2(fileURLToPath2(import.meta.url));
 var STIL = external_exports.enum(STILE);
 var text = (t) => ({ content: [{ type: "text", text: t }] });
-var server = new McpServer({ name: "techno", version: "0.2.0" });
+var server = new McpServer({ name: "techno", version: "0.2.1" });
 server.registerTool("einrichten", {
   description: "Erststart: kopiert das Remote Script ClaudeMixer nach Ableton, installiert fehlende Python-Pakete (numpy, scipy, pycaw) und ffmpeg, pr\xFCft Demucs und die Verbindung zu Live.",
   inputSchema: { installieren: external_exports.boolean().default(true).describe("false = nur pr\xFCfen, nichts installieren") }
