@@ -6,6 +6,22 @@ Claude-Code-Plugin für Ableton Live: Einzelsounds, Spuren und ganze Tracks im S
 
 ![RAWR Techno: Track gebaut, als deep eingeordnet, Export gegen die Sammlung](bilder/app-track.png)
 
+## Hörproben
+
+Je 30 Sekunden aus ganzen Tracks, die das Plugin gebaut hat, vom letzten Takt vor dem Peak an. Alle Klänge sind synthetisiert, kein Sample, kein Nachmischen. *Listen: 30-second excerpts of full tracks built by the plugin, synth only, no samples, no mixing afterwards.*
+
+**raw**, 142 BPM, F-Moll
+
+https://github.com/user-attachments/assets/6cecdb60-fb4a-4fdf-a6a7-b90edfef9496
+
+**deep**, 138 BPM, C-Dur
+
+https://github.com/user-attachments/assets/e39d4249-15fa-4c3b-b662-ef8aa9eeee27
+
+**hypnotic**, 139 BPM, Fis-Dur
+
+https://github.com/user-attachments/assets/e28c36ea-3cfc-4c20-92ab-96f2c0b3888d
+
 ## Was es kann
 
 | Sag zu Claude | Ergebnis |
