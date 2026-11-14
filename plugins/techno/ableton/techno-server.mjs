@@ -36716,9 +36716,11 @@ function py(skript, args) {
     throw pythonFehlt(e);
   }
 }
-function soundArgs({ stil, rolle, seed, ton, ordner }) {
+function soundArgs({ stil, rolle, seed, ton, ordner, anzahl, quelle }) {
   const a = [stil, rolle];
   if (seed !== void 0) a.push("--seed", String(seed));
+  if (anzahl !== void 0) a.push("--anzahl", String(anzahl));
+  if (quelle) a.push("--quelle", quelle);
   if (ton) {
     if (!tonName(ton)) throw new Error(`${TON_FEHLER}: "${ton}"`);
     a.push("--ton", tonName(ton));
@@ -36811,7 +36813,7 @@ function profilKennzahlen(stil) {
 var HIER2 = dirname2(fileURLToPath2(import.meta.url));
 var STIL = external_exports.enum(STILE);
 var text = (t) => ({ content: [{ type: "text", text: t }] });
-var server = new McpServer({ name: "techno", version: "0.2.2" });
+var server = new McpServer({ name: "techno", version: "0.3.0" });
 server.registerTool("einrichten", {
   description: "Erststart: kopiert das Remote Script ClaudeMixer nach Ableton, installiert fehlende Python-Pakete (numpy, scipy, pycaw) und ffmpeg, pr\xFCft Demucs und die Verbindung zu Live.",
   inputSchema: { installieren: external_exports.boolean().default(true).describe("false = nur pr\xFCfen, nichts installieren") }
@@ -36834,18 +36836,20 @@ server.registerTool("einrichten", {
 ${aus}`);
 });
 server.registerTool("sound", {
-  description: "Erzeugt einen Einzelsound (Kick, Rumble, Hat, Open Hat, Perc, Synth, Pad) im Stil raw/deep/hypnotic als WAV. Die beste von 24 Varianten nach Abstand zum Stil-Profil; Antwort mit Datei und Messwerten.",
+  description: "Schl\xE4gt Einzelsounds (Kick, Rumble, Hat, Open Hat, Perc, Synth, Pad) im Stil raw/deep/hypnotic als WAV zur Auswahl vor. Quelle library (Standard, wenn TECHNO_LIBRARY vermessen ist): verschiedene Samples der eigenen Bibliothek, die dem Stil-Profil am n\xE4chsten liegen, mit ton auf den Grundton gestimmt. Quelle synth: Synthese, je Vorschlag die beste von 24 Varianten. Antwort je Vorschlag eine JSON-Zeile mit Datei, Original und Messwerten.",
   inputSchema: {
     stil: STIL,
     rolle: external_exports.enum(ROLLEN),
+    anzahl: external_exports.number().int().min(1).max(6).default(3).describe("Wie viele Vorschl\xE4ge zur Auswahl"),
+    quelle: external_exports.enum(["library", "synth"]).optional(),
     seed: external_exports.number().int().optional(),
-    ton: external_exports.string().optional().describe('Grundton tonaler Sounds, z. B. "E"'),
+    ton: external_exports.string().optional().describe('Grundton, auf den Kick, Perc, Synth und Pad gestimmt werden, z. B. "E"'),
     ordner: external_exports.string().optional().describe("Zielordner, Standard ~/Music/RAWR Techno/Sounds")
   }
 }, async (o) => {
   let a;
   try {
-    a = soundArgs(o);
+    a = soundArgs({ ...o, anzahl: o.anzahl ?? 3 });
   } catch {
     return text(`${TON_FEHLER}: "${o.ton}"`);
   }

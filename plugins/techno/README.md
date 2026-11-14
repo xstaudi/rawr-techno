@@ -1,35 +1,27 @@
 # RAWR Techno
 
-Claude-Code-Plugin für Ableton Live: Einzelsounds, Spuren und ganze Tracks im Stil **raw**, **deep** oder **hypnotic**. Die Stile sind Kennzahlen aus einer vermessenen Sammlung von rund 230 Techno-Tracks (Tempo, Kick-Tonhöhe und -Abfall, Drum-Gerüst, Bass-Platz, Arrangement, Lautheit). Das Paket enthält nur diese Zahlen, keine Tracks, Samples oder Titel.
+Claude-Code-Plugin für Ableton Live, ein Ideengeber für Producer und DJs: „Gib mir eine raw-Kick“, und du bekommst drei Vorschläge zur Auswahl. Dazu Spuren und ganze Track-Skizzen im Stil **raw**, **deep** oder **hypnotic** als Startpunkt für deine eigene Arbeit. Die Stile sind Kennzahlen aus einer vermessenen Sammlung von rund 230 Techno-Tracks (Tempo, Kick-Tonhöhe und -Abfall, Drum-Gerüst, Bass-Platz, Arrangement, Lautheit). Das Paket enthält nur diese Zahlen, keine Tracks, Samples oder Titel.
 
-*Claude Code plugin for Ableton Live: generate techno sounds, parts and full tracks (raw / deep / hypnotic) from measured style profiles.*
+Die Stile bauen aufeinander auf: **raw** ist roh und dunkel, nur Kick, Rumble, Hats und Perc. **deep** legt weiche Moll-Akkorde mit Dub-Echo und eine Fläche darüber. **hypnotic** zieht mit einem kurzen Synth-Loop, der vom ersten bis zum letzten Groove unverändert durchläuft.
+
+*Claude Code plugin for Ableton Live, an idea generator for producers and DJs: ask for a raw kick and pick from three suggestions; parts and full track sketches (raw / deep / hypnotic) from measured style profiles.*
 
 ![RAWR Techno: Track gebaut, als deep eingeordnet, Export gegen die Sammlung](bilder/app-track.png)
 
-## Hörproben
+## Hörprobe
 
-Je 30 Sekunden aus ganzen Tracks, die das Plugin gebaut hat, vom letzten Takt vor dem Peak an. Alle Klänge sind synthetisiert, kein Sample, kein Nachmischen. *Listen: 30-second excerpts of full tracks built by the plugin, synth only, no samples, no mixing afterwards.*
+raw, deep und hypnotic nacheinander, je ein Ausschnitt aus einem ganzen Track, den das Plugin gebaut hat, vom letzten Takt vor dem Peak an, ohne Nachmischen. *Listen: raw, deep and hypnotic, each an excerpt of a full track built by the plugin, no mixing afterwards.*
 
-**raw**, 142 BPM, F-Moll
-
-https://github.com/user-attachments/assets/6cecdb60-fb4a-4fdf-a6a7-b90edfef9496
-
-**deep**, 138 BPM, C-Dur
-
-https://github.com/user-attachments/assets/e39d4249-15fa-4c3b-b662-ef8aa9eeee27
-
-**hypnotic**, 139 BPM, Fis-Dur
-
-https://github.com/user-attachments/assets/e28c36ea-3cfc-4c20-92ab-96f2c0b3888d
+https://github.com/user-attachments/assets/85930b5f-d099-4741-87b3-8f2cd8b7f05b
 
 ## Was es kann
 
 | Sag zu Claude | Ergebnis |
 |---|---|
-| „raw kick“, „deep pad in F“, „hypnotic hihat“ | WAV-Datei, die beste von 24 Synthese-Varianten nach Abstand zum Stil-Profil |
+| „raw kick“, „deep pad in F“, „hypnotic hihat“ | drei WAV-Vorschläge zur Auswahl (bis zu sechs auf Wunsch): aus deiner eigenen Sample-Library die Klänge, die dem Stil-Profil am nächsten liegen, auf den Grundton gestimmt; ohne Library synthetisiert |
 | „hypnotic Kick und Rumble, 16 Takte“ | Spuren als Loop im offenen Live-Set |
 | „raw track“, „deep track mit 7 Minuten“ | neues Set mit Arrangement, Pegeln, Limiter auf das LUFS-Ziel des Stils und WAV-Export |
-| „raw track und prüf ihn“ | dazu die Demucs-Messung des Exports gegen das Profil; liegt der Track außerhalb des Stils, baut das Plugin bis zu zweimal mit neuem Zufallswert neu (je etwa 20 Minuten), Fehlversuche bleiben in ihrem Ordner |
+| „raw track und prüf ihn“ | dazu die Demucs-Messung des Exports gegen das Profil; liegen Tempo, Kick, Lautheit, Länge oder Aufbau außerhalb, baut das Plugin bis zu zweimal mit neuem Zufallswert neu (je etwa 20 Minuten), Fehlversuche bleiben in ihrem Ordner |
 | „öffne techno“ | die Oberfläche im Browser, alles per Klick |
 
 ## Oberfläche
@@ -68,6 +60,8 @@ Claude kopiert das Remote Script `ClaudeMixer` in deine Ableton User Library, in
 
 Optional für die Stil-Prüfung: `python -m pip install --user demucs` (mit Nvidia-Karte schneller).
 
+Optional für Vorschläge aus deinen eigenen Samples: `TECHNO_LIBRARY` auf deinen Sample-Ordner setzen (Unterordner `Kicks/One-Shots`, `HiHats/One-Shots`, `Percussion/One-Shots`, `Synths/One-Shots`, `Atmo-Pads/One-Shots`), dann zu Claude „vermiss meine Samples“ sagen. Das misst jedes Sample einmal (Helligkeit, Rauheit, Länge, Grundton) und dauert je nach Größe einige Minuten. Die Samples bleiben auf deinem Rechner.
+
 ## Aktualisieren und entfernen
 
 ```
@@ -105,7 +99,7 @@ Setzen in PowerShell, z. B. `setx TECHNO_PYTHON "C:\Python312\python.exe"`, dana
 
 - Export und Speichern laufen über Tastatur und Fenstertitel von Live. Während eines Laufs nicht in Live klicken. Getestet nur mit deutscher Live-Oberfläche.
 - Das Remote Script nimmt Befehle von jedem Programm auf diesem Rechner an (nur 127.0.0.1, nicht aus dem Netz).
-- Die Klänge sind einfache Synthese, keine Sample-Packs.
+- Ohne eigene Sample-Library sind die Klänge einfache Synthese. deep-Akkorde und Fläche sind immer synthetisiert.
 - Live Intro erlaubt 16 Spuren; ein Track braucht bis zu 7.
 
 ## In English
@@ -117,7 +111,11 @@ claude plugin marketplace add xstaudi/rawr-techno
 claude plugin install techno@rawr-techno
 ```
 
-Then tell Claude „set up techno“, select the control surface `ClaudeMixer` in Live, and say „raw kick“, „hypnotic kick and rumble, 16 bars“, „deep track“ or „open techno“ for the browser app. „raw track and check it“ measures the export with Demucs; if it lands outside the style, the plugin rebuilds up to twice with a new random seed.
+The styles stack: **raw** is kick, rumble, hats and percussion only; **deep** adds soft minor chords with dub echo and a pad; **hypnotic** adds a short synth loop that runs unchanged through every groove section.
+
+Optional: point `TECHNO_LIBRARY` at your sample folder and say „measure my samples“; suggestions then come from your own samples, tuned to the key.
+
+Then tell Claude „set up techno“, select the control surface `ClaudeMixer` in Live, and say „raw kick“, „hypnotic kick and rumble, 16 bars“, „deep track“ or „open techno“ for the browser app. „raw track and check it“ measures the export with Demucs; if tempo, kick, loudness, length or structure land outside the profile, the plugin rebuilds up to twice with a new random seed.
 
 ## Lizenz
 

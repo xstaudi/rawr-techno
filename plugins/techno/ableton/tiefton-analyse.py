@@ -83,7 +83,9 @@ def kick_werte(k):
         werte.update(f_start_hz=round(float(fs), 1), f_end_hz=round(float(fe), 1), f_end_note=note(fe), pitch_tau_ms=round(float(tau) * 1000, 1))
     except RuntimeError:
         werte['pitch_fit'] = 'fehlgeschlagen'
-    werte['f_bei_ms'] = {ms: round(float(np.interp(ms / 1000, t_voll, f_voll)), 1) for ms in (5, 10, 20, 40, 80, 150)}
+    # leere Tonhoehenkurve (Kick ohne erkennbaren Grundton im Demucs-Stem): fehlender Messwert statt Absturz der Pruefung
+    if len(t_voll):
+        werte['f_bei_ms'] = {ms: round(float(np.interp(ms / 1000, t_voll, f_voll)), 1) for ms in (5, 10, 20, 40, 80, 150)}
     werte.update(abfall)
     spek = np.abs(np.fft.rfft(k * np.hanning(len(k))))
     fq = np.fft.rfftfreq(len(k), 1 / SR)

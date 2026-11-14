@@ -19745,6 +19745,9 @@ var track = external_exports.object({
   sample: external_exports.string().min(1),
   volume: external_exports.number().min(-36).max(36).default(-12),
   params: external_exports.record(external_exports.string(), external_exports.number()).default({}),
+  // Anzeigewerte (ms, dB, Hz, %) per Halbierungssuche; Simpler ist Geraet 0, Effekte folgen in dieser Reihenfolge
+  simpler: external_exports.record(external_exports.string(), external_exports.number()).default({}),
+  effekte: external_exports.array(external_exports.object({ name: external_exports.string().min(1), werte: external_exports.record(external_exports.string(), external_exports.number()).default({}) })).default([]),
   patterns: external_exports.record(external_exports.string(), pattern),
   play: external_exports.record(external_exports.string(), play)
 });

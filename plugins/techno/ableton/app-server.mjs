@@ -112,9 +112,11 @@ function pyAsync(skript, args) {
     );
   });
 }
-function soundArgs({ stil, rolle, seed, ton, ordner }) {
+function soundArgs({ stil, rolle, seed, ton, ordner, anzahl, quelle }) {
   const a = [stil, rolle];
   if (seed !== void 0) a.push("--seed", String(seed));
+  if (anzahl !== void 0) a.push("--anzahl", String(anzahl));
+  if (quelle) a.push("--quelle", quelle);
   if (ton) {
     if (!tonName(ton)) throw new Error(`${TON_FEHLER}: "${ton}"`);
     a.push("--ton", tonName(ton));

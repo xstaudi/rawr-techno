@@ -2,7 +2,7 @@
 
 Aufruf: python -I -W ignore stil-pruefen.py <raw|deep|hypnotic> <export.wav>
 Arbeitsordner: <export-ordner>/pruefung/. Ausgabe: Tabelle Merkmal | Export | Sammlung (Quartile) | ok, dazu die
-Stil-Zuordnung, die der Export in der Sammlung bekaeme. Exit 1, wenn ein Pflicht-Merkmal ausserhalb liegt.
+Stil-Zuordnung, die der Export in der Sammlung bekaeme (nur Info). Exit 1, wenn ein Pflicht-Merkmal ausserhalb liegt.
 """
 import importlib.util, json, shutil, sys
 from pathlib import Path
@@ -98,7 +98,12 @@ if __name__ == '__main__':
     for f, (w, anteil) in info.items():
         print(f'| {f} | {w} | {anteil} {"% der Sammlung" if f != "bass_slot" else "(Slot: Tracks)"} | – |')
     s, werte = zuordnung(m)
-    print(f'\nStil-Zuordnung des Exports: {s} (raw/deep/hypnotic = {werte})')
+    # nur Info: die Stile ueberlappen, Martins Referenzen landen selbst quer (deep -> hypnotic, hypnotic -> raw)
+    print(f'\nStil-Zuordnung des Exports (Info): {s} (raw/deep/hypnotic = {werte})')
     fehlt = [n for n, _, _, ok in zeilen if n in PFLICHT and not ok]
+    # nicht messbar sichtbar melden, aber nicht sperren: weiche Sinus-Kicks (abgenommenes deep s7) rutschen in den Bass-Stem
+    offen = sorted(PFLICHT - {z[0] for z in zeilen})
+    if offen:
+        print('Pflicht nicht messbar (Kick nach Demucs ohne Tonhoehe): ' + ', '.join(offen))
     print('Pflicht ausserhalb: ' + (', '.join(fehlt) if fehlt else 'keins'))
-    sys.exit(1 if fehlt or s != stil else 0)
+    sys.exit(1 if fehlt else 0)

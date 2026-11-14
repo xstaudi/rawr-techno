@@ -16,13 +16,15 @@ Werkzeuge des MCP-Servers `techno` (Plugin): `sound`, `komponente`, `track`, `st
 
 | Wunsch | Werkzeug | Beispiel |
 |---|---|---|
-| Einzelsound als WAV | `sound` | „raw kick“ → `{stil:"raw", rolle:"kick"}`; „deep pad in F“ → `{stil:"deep", rolle:"pad", ton:"F"}` |
+| Einzelsound als WAV | `sound` | „raw kick“ → `{stil:"raw", rolle:"kick"}` (3 Vorschläge); „deep pad in F, gib mir 5“ → `{stil:"deep", rolle:"pad", ton:"F", anzahl:5}` |
 | Spuren als Loop ins offene Set | `komponente` | „hypnotic Kick und Rumble, 16 Takte“ → `{stil:"hypnotic", spuren:["Kick","Rumble"], takte:16}` |
 | Ganzer Track mit Export | `track` | „raw track“ → `{stil:"raw"}`; „deep track 7 Minuten“ → `{stil:"deep", minuten:7}` |
 | Kennzahlen eines Stils | `profil` | „was macht hypnotic aus?“ |
 | Oberfläche im Browser | `app` | „öffne techno“, „zeig mir die App“ |
 
 Rollen für `sound`: kick, rumble, hat, openhat, perc, synth, pad. Spuren für `komponente`: Kick, Rumble, Hat, Hat 2, Perc, Synth, Pad.
+
+Das Plugin ist ein Ideengeber: `sound`-Vorschläge als Liste mit Dateinamen zeigen und fragen, welcher passt oder ob neue kommen sollen; nicht einen Vorschlag als „den richtigen“ verkaufen.
 
 ## Ablauf `track`
 
@@ -36,6 +38,6 @@ Rollen für `sound`: kick, rumble, hat, openhat, perc, synth, pad. Spuren für `
 
 - Windows, Ableton Live 11 oder 12 mit deutscher oder englischer Oberfläche. Getestet: Live 11 Intro, deutsch. Englische Dialogtitel sind ungetestet.
 - Intro erlaubt 16 Spuren; ein Track braucht bis zu 7.
-- Die Klänge sind synthetisch (Quelle `synth`). `library` braucht eine eigene, vermessene Sample-Library (`TECHNO_LIBRARY`, Ordner `Kicks/One-Shots`, `HiHats/One-Shots`, …).
-- `pruefen` braucht Demucs (`pip install demucs`); ohne Nvidia-Karte dauert die Prüfung 5–10 min. Liegt der Export außerhalb des Stils, baut `track` ohne festen `seed` bis zu zweimal neu; `status` zeigt die Zeilen „Neuversuch“. Mit festem `seed` gibt es keinen Neuversuch.
+- Quelle `library` (Standard, sobald vermessen) wählt aus der eigenen Sample-Library (`TECHNO_LIBRARY`, Ordner `Kicks/One-Shots`, `HiHats/One-Shots`, …); ohne sie ist alles synthetisch. „vermiss meine Samples“: `python -I -W ignore <Plugin-Ordner>/ableton/sample-merkmale.py` im Hintergrund starten (einmalig, je nach Größe Minuten).
+- `pruefen` braucht Demucs (`pip install demucs`); ohne Nvidia-Karte dauert die Prüfung 5–10 min. Liegt ein Pflicht-Merkmal (Tempo, Kick, Lautheit, Länge, Aufbau) außerhalb, baut `track` ohne festen `seed` bis zu zweimal neu; `status` zeigt die Zeilen „Neuversuch“. Mit festem `seed` gibt es keinen Neuversuch.
 - Die Stil-Profile sind Kennzahlen einer privaten Sammlung (nur Zahlen, keine Tracks oder Namen).

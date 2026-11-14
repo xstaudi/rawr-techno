@@ -56,16 +56,39 @@ def kick_ziel(p):
 
 
 def rumble_bauen(p, grundton_pc, aus, drive):
-    # Grundton zwischen 62 und 124 Hz: in der Lage der Kick (um 55 Hz) legt Demucs das Rumble mit in den Drum-Stem
-    hz = next(f for o in range(1, 5) if 62 <= (f := 440 * 2 ** ((grundton_pc + 12 * o - 69) / 12)) < 124)
+    hz = 440 * 2 ** ((kl.rumble_midi(grundton_pc) - 69) / 12)
     a = SimpleNamespace(hz=hz, laenge=median(p['bass']['abfall_12db_ms']) * 2, hall=0.3, drive=drive)
     tb.schreiben(tb.rumble(a), str(aus))
     return a
 
 
-def waehle(rolle, ziel, rng, top=5):
-    """Samples nach gewichtetem Abstand zum Ziel (nur angegebene Merkmale), Zufall unter den besten top."""
+def klang_ziel(stil, p, rolle):
+    """Zielmerkmale je Rolle fuer die Sample-Wahl (Bibliothek) und die Synthese im Track."""
+    sm_ = p['stil_merkmale']
+    rauh, hell = median(sm_['rauheit_db']), median(sm_['synth_hell_hz'])
+    return {'kick': kick_ziel(p),
+            'hat': {'rauheit_db': rauh + (2 if stil == 'raw' else 0), 'hell_hz': kl.hat_hell(stil), 'dauer_max': 150},
+            'openhat': {'rauheit_db': rauh, 'hell_hz': 6000, 'dauer_min': 250},
+            'perc': {'hell_hz': 600, 'dauer_max': 300},
+            'synth': {'hell_hz': hell, 'dauer_min': 400} if stil == 'deep' else {'hell_hz': hell, 'rauheit_db': rauh, 'dauer_max': 450},
+            'pad': {'hell_hz': hell, 'dauer_min': 1500}}[rolle]
+
+
+def waehle(rolle, ziel, rng, top=5, stil=None):
+    """Zufall unter den top besten Samples der Rangliste."""
+    beste = rangliste(rolle, ziel, stil)[:top]
+    return beste[int(rng.integers(len(beste)))]
+
+
+# deep soll harmonisch bleiben (Buch: Dub/Melodic statt Warehouse/Industrial): harte Genre-Ordner und verzerrte Samples meiden
+MEIDEN = {'deep': re.compile(r'[\\/](Hard Techno|Industrial Techno|Rave Techno|Acid Techno|Synthwave)[\\/]|distort|crunch|dirty|noise|saturat', re.I)}
+
+
+def rangliste(rolle, ziel, stil=None):
+    """Samples nach gewichtetem Abstand zum Ziel (nur angegebene Merkmale), bestes zuerst."""
     v = [s for s in sm.vorrat(rolle) if not UNPASSEND.search(Path(s['pfad']).stem)]
+    if stil in MEIDEN:
+        v = [s for s in v if not MEIDEN[stil].search(s['pfad'])] or v
     if 'dauer_max' in ziel:
         v = [s for s in v if s['dauer_ms'] <= ziel['dauer_max']] or v
     if 'dauer_min' in ziel:
@@ -83,8 +106,7 @@ def waehle(rolle, ziel, rng, top=5):
         if 'rauheit_db' in ziel:
             d += abs(s['rauheit_db'] - ziel['rauheit_db']) / 3
         return d
-    beste = sorted(v, key=abstand)[:top]
-    return beste[int(rng.integers(len(beste)))]
+    return sorted(v, key=abstand)
 
 
 def transponieren(s, pc):
@@ -92,7 +114,7 @@ def transponieren(s, pc):
     return ((pc - round(s['grundton_midi']) % 12 + 6) % 12) - 6
 
 
-def motiv(stil, rng, basis):
+def motiv(stil, rng, basis, akkord=None):
     st = STUFEN[stil]
     if stil == 'hypnotic':
         # 1 Takt, 5-7 Schlaege bevorzugt auf x.25/x.75: ein Loop, der ueber den ganzen Track traegt
@@ -101,8 +123,20 @@ def motiv(stil, rng, basis):
     if stil == 'raw':
         lagen = sorted(rng.choice(32, size=int(rng.integers(3, 6)), replace=False))
         return [[i * 0.25, 0.15, int(rng.integers(95, 127)), basis + int(rng.choice(st))] for i in lagen]
-    # deep: Dub-Akkord (Moll 7) auf x.75 von Beat 1 und 3, dazu leise Nachschlaege
-    return [[pos, 0.4, v, basis + s] for pos, v in ((0.75, 110), (2.75, 100), (3.75, 70)) for s in st]
+    # deep: Dub-Akkord auf x.75 von Beat 1 und 3, dazu ein leiser Nachschlag, knapp hinter dem Raster wie von Hand gespielt
+    return [[pos + 0.02, 0.4, v, basis + s] for pos, v in ((0.75, 110), (2.75, 100), (3.75, 70)) for s in akkord or st]
+
+
+# Dub-Akkorde: Moll7, Moll7 mit der Septime im Bass, iv7, Moll7 hoch gelegt; alle halten Grundton oder Moll-Terz des Pads
+DEEP_AKKORDE = {'A': [0, 3, 7, 10], 'B': [-2, 3, 7, 10], 'C': [-7, -4, 0, 3], 'D': [3, 7, 10, 12]}
+# Dub-Kette nach Buch, in Live-Intro-Geraeten: Mulm raus, Hoehen zu, punktierte Achtel mit dunklen Echos, wenig Hall
+DEEP_AKKORD_FX = [{'name': 'EQ Three', 'werte': {'GainLo': -15, 'GainMid': -4}},
+                  {'name': 'Auto Filter', 'werte': {'Frequency': 3000, 'Resonance': 10}},
+                  {'name': 'Delay', 'werte': {'L 16th': 3, 'Feedback': 35, 'Filter Freq': 1200, 'Dry/Wet': 30}},
+                  {'name': 'Reverb', 'werte': {'Decay Time': 3, 'Dry/Wet': 18}}]
+DEEP_PAD_FX = [{'name': 'EQ Three', 'werte': {'GainLo': -15}},
+               {'name': 'Auto Filter', 'werte': {'Frequency': 700, 'Resonance': 20, 'LFO Amount': 3, 'LFO Frequency': 0.2}},
+               {'name': 'Reverb', 'werte': {'Decay Time': 4.4, 'Dry/Wet': 19}}]
 
 
 def variante(noten, rng, basis, stil):
@@ -158,6 +192,20 @@ BESETZUNG = {
     'c':      {'Kick': 'A', 'Hat': 'B', 'Hat 2': 'A', 'Rumble': 'A', 'Synth': 'B'},
     'outro':  {'Kick': 'A', 'Hat': 'A', 'Rumble': 'A'},
 }
+# raw ohne Synth und Pad: Wechsel je Abschnitt tragen Rumble, Open Hat, Perc und das Hat-Muster
+RAW_BESETZUNG = {
+    'intro':  {'Kick': 'A', 'Hat': 'A'},
+    'aufbau': {'Kick': 'A', 'Hat': 'A', 'Rumble': 'A'},
+    'a1':     {'Kick': 'A', 'Hat': 'A', 'Rumble': 'A', 'Perc': 'A'},
+    'a2':     {'Kick': 'A', 'Hat': 'B', 'Hat 2': 'A', 'Rumble': 'A', 'Perc': 'A'},
+    'break':  {'Hat': 'A', 'Hat 2': 'A'},
+    'b1':     {'Kick': 'A', 'Hat': 'B', 'Hat 2': 'A', 'Rumble': 'A', 'Perc': 'A'},
+    'b2':     {'Kick': 'A', 'Hat': 'A', 'Rumble': 'A'},
+    'break2': {'Hat 2': 'A', 'Perc': 'A'},
+    'peak':   {'Kick': 'A', 'Hat': 'B', 'Hat 2': 'A', 'Rumble': 'A', 'Perc': 'A'},
+    'c':      {'Kick': 'A', 'Hat': 'A', 'Hat 2': 'A', 'Rumble': 'A'},
+    'outro':  {'Kick': 'A', 'Hat': 'A', 'Rumble': 'A'},
+}
 RAMPE = {'intro': [0.8, 1], 'aufbau': [0.5, 1], 'break': [0.6, 1], 'break2': [0.6, 1], 'outro': [1, 0.7]}
 SPUREN = ('Kick', 'Rumble', 'Hat', 'Hat 2', 'Perc', 'Synth', 'Pad')
 SYNTH_WECHSEL = ['A', 'C', 'B', 'D']
@@ -168,19 +216,23 @@ def rezept(stil, seed, bpm=None, quelle='library', minuten=None, nur=None, takte
     """Song-Spec fuer build.mjs. nur + takte = Komponente: nur diese Spuren, ein Abschnitt 'Loop' mit takte Takten."""
     rng = np.random.default_rng(seed)
     p = kl.profil(stil)
-    lo, _, hi = p['bpm']['quartile']
-    bpm = bpm or int(round(rng.uniform(lo, hi)))
+    lo, mitte, hi = p['bpm']['quartile']
+    # deep/hypnotic-Referenzen laufen 144-148 BPM: obere Haelfte statt Q1-Q3
+    bpm = bpm or int(round(rng.uniform(lo, hi) if stil == 'raw' else rng.uniform(mitte, hi + 2)))
     gt = p['tonart']['grundton']
     pc = NOTEN.index(rng.choice(list(gt), p=np.array(list(gt.values())) / sum(gt.values())))
-    moll = rng.random() < p['tonart']['moll_anteil']
+    # deep immer Moll: Dub-Akkorde in Dur klangen zu wenig deep
+    moll = stil == 'deep' or rng.random() < p['tonart']['moll_anteil']
     name = f'{stil.capitalize()} {bpm} s{seed}' + (f" {'+'.join(nur)} {takte}T" if nur else '')
     ordner = Path(aus or Path.home() / 'Music') / name
     (ordner / 'Sounds').mkdir(parents=True, exist_ok=True)
-    gewollt = set(nur or SPUREN)
+    # raw = roh, weniger ist mehr; Synth erst ab deep (auf Wunsch per --nur auch in raw)
+    gewollt = set(nur or [s for s in SPUREN if not (stil == 'raw' and s == 'Synth')])
 
     def klang(rolle, ziel, synth_rolle, ton=None):
-        if quelle == 'library':
-            return waehle(rolle, ziel, rng)
+        # deep-Akkorde und Flaeche immer aus der Synthese: Bibliotheks-Stabs sind oft selbst Akkorde, gestapelt wird das Krawall
+        if quelle == 'library' and not (stil == 'deep' and synth_rolle in ('synth', 'pad')):
+            return waehle(rolle, ziel, rng, stil=stil)
         # Im Track misst die Pruefung die Synth-Kick nach Demucs 4-7 dB dumpfer als einzeln (raw s2, raw s125, deep s2 v4)
         anders = {'obertoene_db': ziel['obertoene_db'] + KICK_DEMUCS_VERLUST_DB} if synth_rolle == 'kick' else None
         x, m, par = kl.erzeugen(stil, synth_rolle, seed=int(rng.integers(1_000_000)), ton=ton, p=p, ziel_anders=anders)
@@ -188,24 +240,25 @@ def rezept(stil, seed, bpm=None, quelle='library', minuten=None, nur=None, takte
         tb.schreiben(x, str(datei))
         return {'pfad': str(datei), **m, **({'f_end_hz': par['f_end_hz']} if 'f_end_hz' in par else {})}
 
-    k = klang('kick', kick_ziel(p), 'kick')
+    k = klang('kick', klang_ziel(stil, p, 'kick'), 'kick')
     rumble_datei = ordner / 'Sounds' / f'{name} Rumble.wav'
     r = rumble_bauen(p, pc, rumble_datei, RUMBLE_DRIVE[stil])
-    sm_ = p['stil_merkmale']
-    rauh = median(sm_['rauheit_db'])
-    hell = median(sm_['synth_hell_hz'])
     tracks = {}
 
-    def spur(n, sample, volume, patterns):
+    def spur(n, sample, volume, patterns, effekte=(), simpler=None):
         if n in gewollt:
-            tracks[n] = {'name': n, 'sample': str(sample), 'volume': volume, 'patterns': patterns}
+            tracks[n] = {'name': n, 'sample': str(sample), 'volume': volume, 'patterns': patterns, 'effekte': list(effekte),
+                         'simpler': simpler or {}}
 
-    spur('Kick', k['pfad'], -11, {'A': {'bars': 1, 'notes': [[b, 0.5, 120 if b % 2 == 0 else 116] for b in range(4)]}})
+    # Kick auf die Tonart stimmen (Buch); mehr als 3 Halbtoene verbiegt Abfall und Druck einer Sample-Kick
+    kick_ton = 60 + (transponieren(k, pc) if quelle == 'library' and abs(transponieren(k, pc)) <= 3 else 0)
+    spur('Kick', k['pfad'], -11, {'A': {'bars': 1, 'notes': [[b, 0.5, 120 if b % 2 == 0 else 116, kick_ton] for b in range(4)]}})
     bass = p['bass']['cluster'][0]
     if bass['muster'].count('x') == 0:
         bass = next((c for c in p['bass']['cluster'] if 'x' in c['muster']), bass)
     rumble_noten = [n for n in noten_aus_muster(bass['zentrum_db'], laenge=0.22) if n[0] % 1 != 0]  # nie auf der Kick
-    spur('Rumble', rumble_datei, -15, {'A': {'bars': 1, 'notes': rumble_noten}})
+    # Referenzen: Rumble im Bass-Stem rund 10 dB unter dem Kick-Sub; lauter frisst es die Dynamik im Limiter
+    spur('Rumble', rumble_datei, -24, {'A': {'bars': 1, 'notes': rumble_noten}})
     hats = p['drums']['hat']['cluster']
     hat_a = next((c for c in hats if 'x' in c['muster']), hats[0])
     hat_b = next((c for c in hats if 'x' in c['muster'] and c is not hat_a), hat_a)
@@ -219,41 +272,40 @@ def rezept(stil, seed, bpm=None, quelle='library', minuten=None, nur=None, takte
         if hat_b_noten == hat_noten:
             hat_b_noten = hat_noten + [[3.75, 0.1, 70]]
     if 'Hat' in gewollt:
-        hat = klang('hat', {'rauheit_db': rauh + (2 if stil == 'raw' else 0), 'hell_hz': 7000 if stil != 'deep' else 4500, 'dauer_max': 150}, 'hat')
-        spur('Hat', hat['pfad'], -22, {'A': {'bars': 1, 'notes': hat_noten}, 'B': {'bars': 1, 'notes': hat_b_noten}})
+        hat = klang('hat', klang_ziel(stil, p, 'hat'), 'hat')
+        # deep/hypnotic-Referenzen: Hochton 5 dB leiser als bisher
+        spur('Hat', hat['pfad'], -22 if stil == 'raw' else -26,{'A': {'bars': 1, 'notes': hat_noten}, 'B': {'bars': 1, 'notes': hat_b_noten}})
     if 'Hat 2' in gewollt:
-        hat2 = klang('hat', {'rauheit_db': rauh, 'hell_hz': 6000, 'dauer_min': 250}, 'openhat')
-        spur('Hat 2', hat2['pfad'], -18, {'A': {'bars': 2, 'notes': [[3.5, 0.3, 90], [7.5, 0.3, 100]]}})
+        hat2 = klang('hat', klang_ziel(stil, p, 'openhat'), 'openhat')
+        spur('Hat 2', hat2['pfad'], -18 if stil == 'raw' else -22,{'A': {'bars': 2, 'notes': [[3.5, 0.3, 90], [7.5, 0.3, 100]]}})
     off = [c for c in p['drums']['perc']['cluster'] if any(ch == 'x' and i % 4 for i, ch in enumerate(c['muster']))]
-    if (off or nur) and 'Perc' in gewollt:
+    if (off or nur or stil == 'raw') and 'Perc' in gewollt:
         perc_noten = [n for n in noten_aus_muster(off[0]['zentrum_db'], laenge=0.15) if n[0] % 1 != 0] if off else \
             [[b + 0.75, 0.15, 100] for b in range(4)]
-        perc = klang('perc', {'hell_hz': 600, 'dauer_max': 300}, 'perc')
+        perc = klang('perc', klang_ziel(stil, p, 'perc'), 'perc')
         spur('Perc', perc['pfad'], -22, {'A': {'bars': 1, 'notes': perc_noten}})
     if 'Synth' in gewollt:
-        synth = klang('synth', {'hell_hz': hell, 'rauheit_db': rauh, **({'dauer_min': 400} if stil == 'deep' else {'dauer_max': 450})}, 'synth', pc + 48)
-        basis = 60 + transponieren(synth, pc) - 12 * (stil == 'deep')
-        a = motiv(stil, rng, basis)
-        if not moll and stil == 'deep':
-            a = [[x[0], x[1], x[2], x[3] + (1 if (x[3] - basis) % 12 == 3 else 0)] for x in a]
+        synth = klang('synth', klang_ziel(stil, p, 'synth'), 'synth', pc + 48)
+        basis = 60 + transponieren(synth, pc)
         bars = 2 if stil == 'raw' else 1
-        muster = {'A': {'bars': bars, 'notes': a}, 'B': {'bars': bars, 'notes': variante(a, rng, basis, stil)}}
-        if stil != 'hypnotic':  # raw/deep wechseln das Motiv je Abschnitt, sonst gleichen sich alle 8-Takt-Bloecke (Wiederholung > Q3)
-            muster |= {k: {'bars': bars, 'notes': motiv(stil, rng, basis)} for k in ('C', 'D')}
-        spur('Synth', synth['pfad'], {'raw': -24, 'deep': -17, 'hypnotic': -20}[stil], muster)
+        if stil == 'deep':
+            muster = {k: {'bars': 1, 'notes': motiv(stil, rng, basis, akk)} for k, akk in DEEP_AKKORDE.items()}
+        else:
+            a = motiv(stil, rng, basis)
+            muster = {'A': {'bars': bars, 'notes': a}, 'B': {'bars': bars, 'notes': variante(a, rng, basis, stil)}}
+            if stil == 'raw':  # raw wechselt das Motiv je Abschnitt, sonst gleichen sich alle 8-Takt-Bloecke (Wiederholung > Q3)
+                muster |= {k: {'bars': bars, 'notes': motiv(stil, rng, basis)} for k in ('C', 'D')}
+        deep = stil == 'deep'
+        spur('Synth', synth['pfad'], {'raw': -24, 'deep': -17, 'hypnotic': -20}[stil], muster,
+             DEEP_AKKORD_FX if deep else (), {'Ve Release': 200} if deep else None)
     if (stil == 'deep' or nur) and 'Pad' in gewollt:
-        pad = klang('pad', {'hell_hz': hell, 'dauer_min': 1500}, 'pad', pc + 48)
+        pad = klang('pad', klang_ziel(stil, p, 'pad'), 'pad', pc + 48)
         # eine Oktave hoeher als der Grundton: um 130 Hz zaehlt Demucs das Pad zum Bass, dann fehlt die Flaeche im other-Stem
         pb = 60 + transponieren(pad, pc)
         terz = 3 if moll else 4
-        if stil == 'deep':
-            # je 8 Takte ein anderer Akkord (i-VI-iv bzw. I-IV-V): sonst gleichen sich alle 8-Takt-Bloecke (synth_wiederholung > Q3)
-            stufen = [0, -4, 5] if moll else [0, 5, -5]
-            noten = [[32 * k + b, 7.9, 85 if b % 16 else 90, pb + s + (terz if b % 16 else 0)] for k, s in enumerate(stufen) for b in (0, 8, 16, 24)]
-            pad_muster = {'bars': 24, 'notes': noten}
-        else:
-            pad_muster = {'bars': 4, 'notes': [[0, 7.9, 90, pb], [8, 7.9, 85, pb + terz]]}
-        spur('Pad', pad['pfad'], -20, {'A': pad_muster})
+        # Grundton und Terz als Halteflaeche; die Akkordwechsel traegt der Synth (DEEP_AKKORDE), sonst reiben sich beide
+        pad_muster = {'bars': 4, 'notes': [[0, 7.9, 90, pb], [8, 7.9, 85, pb + terz]]}
+        spur('Pad', pad['pfad'], -20, {'A': pad_muster}, DEEP_PAD_FX if stil == 'deep' else ())
 
     if nur:
         folge = [('Loop', takte, 'peak')]
@@ -263,7 +315,7 @@ def rezept(stil, seed, bpm=None, quelle='library', minuten=None, nur=None, takte
         t['play'] = {}
     synth_folge = iter(SYNTH_WECHSEL * len(folge))
     for sec, _, rolle in folge:
-        besetzung = BESETZUNG[rolle]
+        besetzung = (RAW_BESETZUNG if stil == 'raw' else BESETZUNG)[rolle]
         # deep-Tracks der Sammlung haben die Flaeche durchgehend unter dem Synth (synth_flaeche_db Median -9 dB)
         if stil == 'deep' and 'Synth' in besetzung:
             besetzung = {**besetzung, 'Pad': 'A'}

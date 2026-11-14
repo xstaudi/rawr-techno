@@ -4,7 +4,7 @@ Aufruf: python -I -W ignore stil-klang.py <raw|deep|hypnotic> <kick|rumble|hat|o
 Je Aufruf entstehen KANDIDATEN Varianten; gemessen wird wie bei Library-Samples (sample-merkmale.merkmale), behalten wird
 die Variante mit dem kleinsten Abstand zum Stil-Ziel. Ausgabe: WAV plus Messwerte als JSON-Zeile.
 """
-import argparse, importlib.util, json, os, sys
+import argparse, importlib.util, json, os, subprocess, sys
 from pathlib import Path
 from types import SimpleNamespace
 import numpy as np
@@ -63,15 +63,25 @@ def saege(f, t, rng, stimmen=3, verstimmt=0.12):
     return x / stimmen
 
 
+def rumble_midi(pc):
+    # 36-72 Hz wie in den Referenztracks; frueher 62-124 Hz fuer saubere Demucs-Trennung, das droehnte im Oberbass
+    return pc + (36 if pc < 2 else 24)
+
+
+def hat_hell(stil):
+    # echte kurze Hats der Library: Schwerpunkt 9-10 kHz; tiefer (5-6 kHz) liegt die Energie bei 2-5 kHz und klingt schrill
+    return {'raw': 8000, 'deep': 7500, 'hypnotic': 8000}[stil]
+
+
 def ziele(stil, p):
     sm_ = p['stil_merkmale']
     rauh, hell = sm_['rauheit_db'][1], sm_['synth_hell_hz'][1]
     return {
         'kick': {'obertoene_db': sm_['kick_obertoene_db'][1], 'abfall_20db_ms': p['kick']['abfall_20db_ms'][1]},
-        'hat': {'hell_hz': 4500 if stil == 'deep' else 7000, 'rauheit_db': rauh + (2 if stil == 'raw' else 0), 'dauer_ms': 90},
-        'openhat': {'hell_hz': 6000, 'rauheit_db': rauh, 'dauer_ms': 350},
+        'hat': {'hell_hz': hat_hell(stil),'rauheit_db': rauh + (2 if stil == 'raw' else 0), 'dauer_ms': 90},
+        'openhat': {'hell_hz': 8000, 'rauheit_db': rauh, 'dauer_ms': 350},
         'perc': {'hell_hz': 600, 'dauer_ms': 180},
-        'synth': {'hell_hz': hell, 'rauheit_db': rauh, 'dauer_ms': 900 if stil == 'deep' else 250},
+        'synth': {'hell_hz': hell, 'dauer_ms': 900} if stil == 'deep' else {'hell_hz': hell, 'rauheit_db': rauh, 'dauer_ms': 250},
         'pad': {'hell_hz': hell, 'dauer_ms': 2500},
     }
 
@@ -104,7 +114,9 @@ def hat(p, stil, rng, offen=False):
     rausch = rng.standard_normal(len(t))
     mix = rng.uniform(.3, 1)
     x = mix * rausch / rausch.std() + (1 - mix) * metall / metall.std()
-    x = filt(filt(x, 'highpass', rng.uniform(2000, 9000)), 'lowpass', min(rng.uniform(5000, 16000), SR / 2 - 100))
+    # Hochpass ab 4 kHz: darunter klingeln die Metall-Obertoene bei 2-3 kHz, wo das Ohr am empfindlichsten ist
+    # Tiefpass bis 12 kHz: raw-Sammlung liegt ueber 12 kHz rund 8 dB unter offenen Synth-Hats (Zischen)
+    x = filt(filt(x, 'highpass', rng.uniform(4000, 7500)), 'lowpass', min(rng.uniform(8000, 12000), SR / 2 - 100))
     abfall = len(t) / SR / 4
     return tb.saettigen(x * np.exp(-t / abfall), float(rng.choice([1, 2, 4, 8]))), {'mix': round(mix, 2)}
 
@@ -117,22 +129,37 @@ def perc(p, stil, rng):
     return tb.saettigen(x, 1.5), {'hz': round(f0)}
 
 
+def dub_echo(x, verz=.32, rueck=.45, n=4):
+    # jedes Echo dunkler als das vorige, wie ein Band-Delay; nur fuer den Einzelsound, im Track macht das Live-Delay
+    d = int(verz * SR)
+    y = np.concatenate([x, np.zeros(d * n)])
+    echo = x
+    for k in range(1, n + 1):
+        echo = filt(echo, 'lowpass', 1500) * rueck
+        y[k * d:k * d + len(echo)] += echo
+    return y
+
+
 def synth(p, stil, rng, ton):
-    t = zeit(rng.uniform(700, 1400) if stil == 'deep' else rng.uniform(150, 400))
+    # deep soll harmonisch sein, kein Krawall -> weich gefiltert, kaum Saettigung, kein Rauschen, Dub-Echo
+    weich = stil == 'deep'
+    t = zeit(rng.uniform(500, 900) if weich else rng.uniform(150, 400))
     x = saege(hz(ton), t, rng)
     # Filterhuelle: offen beim Anschlag, dann zu; Grenzfrequenz bestimmt die Helligkeit
-    grenze = rng.uniform(400, 8000)
+    grenze = rng.uniform(300, 1200) if weich else rng.uniform(400, 8000)
     stuecke = np.array_split(np.arange(len(t)), 24)
     y = np.concatenate([filt(x, 'lowpass', min(grenze * (1 + 3 * np.exp(-t[s[0]] / .05)), SR / 2 - 100))[s] for s in stuecke])
-    y = (y + rng.uniform(0, .3) * filt(rng.standard_normal(len(t)), 'highpass', 2000)) * np.exp(-t / (len(t) / SR / 3))
-    drive = float(rng.choice([1, 2, 4, 8, 16]))
+    rausch = 0 if weich else rng.uniform(0, .3)
+    y = (y + rausch * filt(rng.standard_normal(len(t)), 'highpass', 2000)) * np.exp(-t / (len(t) / SR / 3))
+    drive = float(rng.choice([1, 1.5, 2] if weich else [1, 2, 4, 8, 16]))
     return tb.saettigen(y, drive), {'grenze_hz': round(grenze), 'drive': drive}
 
 
 def pad(p, stil, rng, ton):
     t = zeit(3500)
     x = saege(hz(ton), t, rng, stimmen=5, verstimmt=.2)
-    x = filt(x, 'lowpass', rng.uniform(400, 4000))
+    # Hochpass: Pad-Grundton um 130 Hz machte deep im Unterbau matschig (Referenz 26 dB weniger bei 120-250 Hz)
+    x = filt(filt(x, 'lowpass', rng.uniform(400, 4000)), 'highpass', 200)
     hull = np.minimum(t / rng.uniform(.3, .8), 1) * np.minimum((t[-1] - t) / .8, 1)
     return x * hull, {}
 
@@ -168,7 +195,8 @@ def erzeugen(stil, rolle, seed=None, ton=None, p=None, ziel_anders=None):
     rng = np.random.default_rng(seed)
     if ton is None:
         gt = p['tonart']['grundton']
-        ton = NOTEN.index(max(gt, key=gt.get)) + {'rumble': 36, 'synth': 48, 'pad': 48}.get(rolle, 0)
+        pc = NOTEN.index(max(gt, key=gt.get))
+        ton = rumble_midi(pc) if rolle == 'rumble' else pc + {'synth': 48, 'pad': 48}.get(rolle, 0)
     bauer = {'kick': lambda: kick(p, stil, rng), 'rumble': lambda: rumble(p, stil, rng, ton), 'hat': lambda: hat(p, stil, rng),
              'openhat': lambda: hat(p, stil, rng, offen=True), 'perc': lambda: perc(p, stil, rng),
              'synth': lambda: synth(p, stil, rng, ton), 'pad': lambda: pad(p, stil, rng, ton)}[rolle]
@@ -194,6 +222,30 @@ def _selbsttest():
         assert len(x) > SR * .05 and np.isfinite(x).all() and np.abs(x).max() <= 1, rolle
     x, m, _ = erzeugen('raw', 'hat', seed=1, p=p)
     assert 3000 < m['hell_hz'] < 12000 and m['dauer_ms'] < 200, m
+    assert all(36 <= hz(rumble_midi(pc)) < 72 for pc in range(12))
+
+
+def aus_bibliothek(stil, rolle, seed, ton, anzahl, ordner):
+    """anzahl verschiedene Samples aus den besten der Bibliothek nach Abstand zum Stil-Ziel; mit ton auf dessen Grundton gestimmt."""
+    rz = _modul('rz', 'stil-rezept.py')  # erst hier: stil-rezept laedt selbst dieses Modul
+    p = profil(stil)
+    liste = rz.rangliste('hat' if rolle == 'openhat' else rolle, rz.klang_ziel(stil, p, rolle), stil)
+    if not liste:
+        raise SystemExit(f'Keine {rolle}-Samples in der Bibliothek ({sm.EIG}); Synthese mit --quelle synth')
+    rng = np.random.default_rng(seed)
+    beste = liste[:max(8, 3 * anzahl)]
+    wahl = sorted(rng.choice(len(beste), size=min(anzahl, len(beste)), replace=False))
+    for i, k in enumerate(wahl):
+        s = beste[k]
+        halb = rz.transponieren(s, ton % 12) if ton is not None and rolle in ('kick', 'synth', 'pad', 'perc') else 0
+        datei = ordner / f'{stil.capitalize()} {rolle} s{seed}-{i + 1} {Path(s["pfad"]).stem}.wav'
+        f = 2 ** (halb / 12)
+        # wie Simpler ohne Warp: schneller abspielen hebt Ton und kuerzt das Sample
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', s['pfad'], '-af', f'aresample={SR},asetrate={SR * f:.3f},aresample={SR}',
+                        str(datei)], check=True)
+        m = {k_: v for k_, v in s.items() if k_ not in ('pfad', 'mtime')}
+        yield {'datei': str(datei), 'stil': stil, 'rolle': rolle, 'quelle': 'library', 'seed': seed, 'original': s['pfad'],
+               'halbtoene': halb, 'messwerte': m}
 
 
 if __name__ == '__main__':
@@ -204,16 +256,31 @@ if __name__ == '__main__':
     ap.add_argument('--seed', type=int, default=None)
     ap.add_argument('--ton', default=None, help='Grundton (z. B. E) oder MIDI-Note')
     ap.add_argument('--aus', default=str(Path.home() / 'Music' / 'RAWR Techno' / 'Sounds'))
+    ap.add_argument('--anzahl', type=int, default=1, choices=range(1, 7), help='Vorschlaege zur Auswahl')
+    ap.add_argument('--quelle', choices=['library', 'synth'], default=None, help='Standard: library, wenn vermessen; Rumble immer synth')
     a = ap.parse_args()
     if a.rolle == 'selbsttest':
         _selbsttest()
         print('selbsttest ok')
         sys.exit(0)
     seed = a.seed if a.seed is not None else int(np.random.default_rng().integers(1e6))
-    ton = None if a.ton is None else (int(a.ton) if a.ton.isdigit() else NOTEN.index(a.ton.upper()) + {'rumble': 36}.get(a.rolle, 48))
-    x, m, par = erzeugen(a.stil, a.rolle, seed, ton)
+    if a.ton is None or a.ton.isdigit():
+        ton = None if a.ton is None else int(a.ton)
+    else:
+        pc = NOTEN.index(a.ton.upper())
+        ton = rumble_midi(pc) if a.rolle == 'rumble' else pc + 48
     ordner = Path(a.aus)
     ordner.mkdir(parents=True, exist_ok=True)
-    datei = ordner / f'{a.stil.capitalize()} {a.rolle} s{seed}.wav'
-    tb.schreiben(x, str(datei))
-    print(json.dumps({'datei': str(datei), 'stil': a.stil, 'rolle': a.rolle, 'seed': seed, 'messwerte': m, 'parameter': par}, ensure_ascii=False))
+    quelle = a.quelle or ('library' if sm.CACHE.exists() and a.rolle != 'rumble' else 'synth')
+    if quelle == 'library':
+        for z in aus_bibliothek(a.stil, a.rolle, seed, ton, a.anzahl, ordner):
+            print(json.dumps(z, ensure_ascii=False))
+        sys.exit(0)
+    for i in range(a.anzahl):
+        x, m, par = erzeugen(a.stil, a.rolle, seed + i, ton)
+        if a.stil == 'deep' and a.rolle == 'synth':
+            x = dub_echo(x)
+        datei = ordner / f'{a.stil.capitalize()} {a.rolle} s{seed + i}.wav'
+        tb.schreiben(x, str(datei))
+        print(json.dumps({'datei': str(datei), 'stil': a.stil, 'rolle': a.rolle, 'quelle': 'synth', 'seed': seed + i, 'messwerte': m,
+                          'parameter': par}, ensure_ascii=False))

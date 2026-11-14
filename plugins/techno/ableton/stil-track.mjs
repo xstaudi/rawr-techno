@@ -133,6 +133,39 @@ if (process.argv[1]?.endsWith("mix.mjs")) {
 import { readFileSync as readFileSync2, mkdirSync, copyFileSync, existsSync as existsSync2, chmodSync } from "node:fs";
 import { basename, join as join2 } from "node:path";
 
+// ableton/param.mjs
+var zahl = (text) => {
+  const t = String(text).replace(",", ".");
+  const n = Number(t.match(/-?(?:[\d.]+|inf)/)?.[0].replace("inf", "Infinity"));
+  return /kHz/.test(t) ? n * 1e3 : n;
+};
+console.assert(
+  zahl("-inf dB") === -Infinity && zahl("-14.0 dB") === -14 && zahl("2.00 : 1") === 2 && zahl("1.50 kHz") === 1500,
+  "zahl() parst Anzeige falsch"
+);
+async function setzeParam(track2, device, param, ziel) {
+  const d = (await mixer("devices", { track: track2 }))[device];
+  const p = d?.params.find((x) => x.name === param);
+  if (!p) throw new Error(`Parameter ${param} fehlt in Geraet ${device}`);
+  const setze = async (v) => zahl((await mixer("set_param", { track: track2, device, param, value: v })).text);
+  if (p.max - p.min <= 1 && /^(On|Off)$/.test(p.text)) return setze(ziel);
+  let [lo, hi] = [p.min, p.max];
+  const steigt = await setze(hi) >= await setze(lo);
+  for (let i = 0; i < 30; i++) {
+    const mitte = (lo + hi) / 2;
+    if (await setze(mitte) < ziel === steigt) lo = mitte;
+    else hi = mitte;
+  }
+  return (await mixer("set_param", { track: track2, device, param, value: (lo + hi) / 2 })).text;
+}
+if (process.argv[1]?.endsWith("param.mjs")) {
+  const [track2, device, param, ziel] = process.argv.slice(2);
+  setzeParam(track2 === "master" ? "master" : track2, Number(device), param, Number(ziel)).then((t) => console.log(`${param} = ${t}`)).catch((e) => {
+    console.error(`Abbruch: ${e.message}`);
+    process.exit(1);
+  });
+}
+
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
 __export(external_exports, {
@@ -19869,6 +19902,9 @@ var track = external_exports.object({
   sample: external_exports.string().min(1),
   volume: external_exports.number().min(-36).max(36).default(-12),
   params: external_exports.record(external_exports.string(), external_exports.number()).default({}),
+  // Anzeigewerte (ms, dB, Hz, %) per Halbierungssuche; Simpler ist Geraet 0, Effekte folgen in dieser Reihenfolge
+  simpler: external_exports.record(external_exports.string(), external_exports.number()).default({}),
+  effekte: external_exports.array(external_exports.object({ name: external_exports.string().min(1), werte: external_exports.record(external_exports.string(), external_exports.number()).default({}) })).default([]),
   patterns: external_exports.record(external_exports.string(), pattern),
   play: external_exports.record(external_exports.string(), play)
 });
@@ -19980,6 +20016,15 @@ async function buildTrack(t, uri, spec, starts) {
   log(`  ${t.name}: Spur ${index + 1}, ${clips} Abschnitte`);
   return index;
 }
+async function geraeteSetzen(index, t) {
+  for (const [param, wert] of Object.entries(t.simpler)) await setzeParam(index, 0, param, wert);
+  for (const fx of t.effekte) {
+    const { devices } = await mixer("load_device", { track: index, name: fx.name });
+    const geraet = devices.length - 1;
+    for (const [param, wert] of Object.entries(fx.werte)) await setzeParam(index, geraet, param, wert);
+  }
+  if (t.effekte.length) log(`    Effekte: ${t.effekte.map((f) => f.name).join(" > ")}`);
+}
 function sectionStarts(spec) {
   const starts = /* @__PURE__ */ new Map();
   let beat = 0;
@@ -20015,7 +20060,10 @@ async function build(spec) {
   await send("set_tempo", { tempo: spec.bpm });
   const { starts, totalBeats: beat } = sectionStarts(spec);
   log(`${spec.name}: ${spec.tracks.length} Spuren, ${beat / 4} Takte bei ${spec.bpm} BPM`);
-  for (const [i, t] of spec.tracks.entries()) await buildTrack(t, uris[i], spec, starts);
+  for (const [i, t] of spec.tracks.entries()) {
+    const index = await buildTrack(t, uris[i], spec, starts);
+    await geraeteSetzen(index, t);
+  }
   await setLocators(spec);
   await send("switch_to_arrangement_view");
   await send("set_current_song_time", { time: 0 });
@@ -20109,10 +20157,11 @@ var LIMITER_CEILING = -2;
 var MAX_RUNDEN = 3;
 var PEGEL_ZIEL = {
   // deep: tonale Perc landet bei Demucs im other-Stem und macht ihn hell und loechrig (deep-Pruefung 14.11.)
+  // Hats: raw-Tracks der Sammlung liegen bei 2-8 kHz rund 3 dB unter unserem frueheren Stand (relativ zur Kick)
   Kick: -4.5,
   Rumble: -8.5,
-  Hat: -13.5,
-  "Hat 2": -19.5,
+  Hat: -15.5,
+  "Hat 2": -21.5,
   Perc: { raw: -18, deep: -24, hypnotic: -18 },
   Synth: { raw: -18, deep: -12, hypnotic: -15 },
   Pad: { raw: -20, deep: -16, hypnotic: -18 }
@@ -20165,13 +20214,22 @@ function lufsMessen(datei) {
   const r = spawnSync2("ffmpeg", ["-nostats", "-i", datei, "-af", "ebur128=peak=true", "-f", "null", "-"], { encoding: "utf8" });
   return lufsAusText(r.stderr ?? "");
 }
+function fensterTitel() {
+  return execFileSync2(powershell(), ["-NoProfile", "-Command", "(Get-Process 'Ableton Live*' | Where-Object MainWindowTitle | Select-Object -First 1).MainWindowTitle"], { encoding: "utf8" }).trim();
+}
 async function frischesSet() {
   const titel = ps2("vorne.ps1", ["-Prozess", "Ableton Live*"]);
-  const fenster = execFileSync2(powershell(), ["-NoProfile", "-Command", "(Get-Process 'Ableton Live*' | Where-Object MainWindowTitle | Select-Object -First 1).MainWindowTitle"], { encoding: "utf8" }).trim();
+  const fenster = fensterTitel();
   if (fenster.includes("*")) throw new Error(`Offenes Set hat ungespeicherte \xC4nderungen (${fenster}): erst speichern`);
-  ps2("tippen.ps1", ["-Prozess", "Ableton*", "-Tasten", "^n"]);
-  await new Promise((r) => setTimeout(r, 4e3));
-  return titel;
+  await send("stop_playback").catch(() => {
+  });
+  for (let versuch = 0; versuch < 3; versuch++) {
+    ps2("vorne.ps1", ["-Prozess", "Ableton Live*"]);
+    ps2("tippen.ps1", ["-Prozess", "Ableton*", "-Tasten", "^n"]);
+    await new Promise((r) => setTimeout(r, 4e3));
+    if (!fensterTitel().includes("[")) return titel;
+  }
+  throw new Error(`Neues Set lie\xDF sich nicht \xF6ffnen, Live zeigt weiter \u201E${fenster}\u201C`);
 }
 async function pegelSetzen(spec, stil) {
   const start = peakBeat(spec);

@@ -15,6 +15,7 @@ import net from "node:net";
 var MIXER_PORT = 9878;
 var PORT = Number(process.env.ABLETON_PORT || MIXER_PORT);
 var TIMEOUT_MS = 3e4;
+var mixer = (type, params = {}) => send(type, params, MIXER_PORT);
 function send(type, params = {}, port = PORT) {
   return new Promise((resolve, reject) => {
     const s = net.connect(port, "127.0.0.1", () => s.write(JSON.stringify({ type, params })));
@@ -47,6 +48,39 @@ if (process.argv[1]?.endsWith("client.mjs") && process.argv[2]) {
   const port = args[0] === "mixer" ? (args.shift(), MIXER_PORT) : PORT;
   send(args[0], JSON.parse(args[1] ?? "{}"), port).then((r) => console.log(JSON.stringify(r, null, 1))).catch((e) => {
     console.error(e.message);
+    process.exit(1);
+  });
+}
+
+// ableton/param.mjs
+var zahl = (text) => {
+  const t = String(text).replace(",", ".");
+  const n = Number(t.match(/-?(?:[\d.]+|inf)/)?.[0].replace("inf", "Infinity"));
+  return /kHz/.test(t) ? n * 1e3 : n;
+};
+console.assert(
+  zahl("-inf dB") === -Infinity && zahl("-14.0 dB") === -14 && zahl("2.00 : 1") === 2 && zahl("1.50 kHz") === 1500,
+  "zahl() parst Anzeige falsch"
+);
+async function setzeParam(track2, device, param, ziel) {
+  const d = (await mixer("devices", { track: track2 }))[device];
+  const p = d?.params.find((x) => x.name === param);
+  if (!p) throw new Error(`Parameter ${param} fehlt in Geraet ${device}`);
+  const setze = async (v) => zahl((await mixer("set_param", { track: track2, device, param, value: v })).text);
+  if (p.max - p.min <= 1 && /^(On|Off)$/.test(p.text)) return setze(ziel);
+  let [lo, hi] = [p.min, p.max];
+  const steigt = await setze(hi) >= await setze(lo);
+  for (let i = 0; i < 30; i++) {
+    const mitte = (lo + hi) / 2;
+    if (await setze(mitte) < ziel === steigt) lo = mitte;
+    else hi = mitte;
+  }
+  return (await mixer("set_param", { track: track2, device, param, value: (lo + hi) / 2 })).text;
+}
+if (process.argv[1]?.endsWith("param.mjs")) {
+  const [track2, device, param, ziel] = process.argv.slice(2);
+  setzeParam(track2 === "master" ? "master" : track2, Number(device), param, Number(ziel)).then((t) => console.log(`${param} = ${t}`)).catch((e) => {
+    console.error(`Abbruch: ${e.message}`);
     process.exit(1);
   });
 }
@@ -19787,6 +19821,9 @@ var track = external_exports.object({
   sample: external_exports.string().min(1),
   volume: external_exports.number().min(-36).max(36).default(-12),
   params: external_exports.record(external_exports.string(), external_exports.number()).default({}),
+  // Anzeigewerte (ms, dB, Hz, %) per Halbierungssuche; Simpler ist Geraet 0, Effekte folgen in dieser Reihenfolge
+  simpler: external_exports.record(external_exports.string(), external_exports.number()).default({}),
+  effekte: external_exports.array(external_exports.object({ name: external_exports.string().min(1), werte: external_exports.record(external_exports.string(), external_exports.number()).default({}) })).default([]),
   patterns: external_exports.record(external_exports.string(), pattern),
   play: external_exports.record(external_exports.string(), play)
 });
@@ -19917,6 +19954,15 @@ async function buildTrack(t, uri, spec, starts) {
   log(`  ${t.name}: Spur ${index + 1}, ${clips} Abschnitte`);
   return index;
 }
+async function geraeteSetzen(index, t) {
+  for (const [param, wert] of Object.entries(t.simpler)) await setzeParam(index, 0, param, wert);
+  for (const fx of t.effekte) {
+    const { devices } = await mixer("load_device", { track: index, name: fx.name });
+    const geraet = devices.length - 1;
+    for (const [param, wert] of Object.entries(fx.werte)) await setzeParam(index, geraet, param, wert);
+  }
+  if (t.effekte.length) log(`    Effekte: ${t.effekte.map((f) => f.name).join(" > ")}`);
+}
 function sectionStarts(spec) {
   const starts = /* @__PURE__ */ new Map();
   let beat = 0;
@@ -19952,7 +19998,10 @@ async function build(spec) {
   await send("set_tempo", { tempo: spec.bpm });
   const { starts, totalBeats: beat } = sectionStarts(spec);
   log(`${spec.name}: ${spec.tracks.length} Spuren, ${beat / 4} Takte bei ${spec.bpm} BPM`);
-  for (const [i, t] of spec.tracks.entries()) await buildTrack(t, uris[i], spec, starts);
+  for (const [i, t] of spec.tracks.entries()) {
+    const index = await buildTrack(t, uris[i], spec, starts);
+    await geraeteSetzen(index, t);
+  }
   await setLocators(spec);
   await send("switch_to_arrangement_view");
   await send("set_current_song_time", { time: 0 });

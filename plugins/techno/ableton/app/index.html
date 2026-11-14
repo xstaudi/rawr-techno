@@ -469,7 +469,7 @@ function kopf(titel, marken) {
 function soundZeigen(r) {
   $('#ausgabe-art').textContent = 'Sound';
   const name = r.datei.split(/[\\/]/).pop().replace(/\.wav$/i, '');
-  const box = kopf(name, [[r.stil, true], [ROLLE_NAME[r.rolle] ?? r.rolle], [`Seed ${r.seed}`], ['beste von 24']]);
+  const box = kopf(name, [[r.stil, true], [ROLLE_NAME[r.rolle] ?? r.rolle], [`Seed ${r.seed}`], [r.quelle === 'library' ? `Bibliothek: ${r.original ?? ''}` : 'beste von 24']]);
   welleLaden(r.datei, box);
   const raster = el('div', 'werte-raster');
   const ziel = r.parameter?.ziel ?? {};
