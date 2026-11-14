@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "techno": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/ableton/techno-server.mjs"
+      ]
+    }
+  }
+}

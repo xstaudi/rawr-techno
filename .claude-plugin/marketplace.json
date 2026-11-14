@@ -1,0 +1,14 @@
+{
+  "name": "rawr-techno",
+  "owner": {
+    "name": "xstaudi"
+  },
+  "description": "Techno-Werkzeuge für Ableton Live und Claude Code",
+  "plugins": [
+    {
+      "name": "techno",
+      "source": "./plugins/techno",
+      "description": "Techno raw / deep / hypnotic in Ableton Live"
+    }
+  ]
+}

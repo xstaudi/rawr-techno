@@ -1,0 +1,15 @@
+{
+  "name": "techno",
+  "version": "0.2.0",
+  "description": "Techno raw / deep / hypnotic in Ableton Live: Einzelsounds, Spuren und ganze Tracks nach Messwerten einer Sammlung",
+  "author": {
+    "name": "xstaudi"
+  },
+  "license": "MIT",
+  "keywords": [
+    "ableton",
+    "techno",
+    "music",
+    "mcp"
+  ]
+}
