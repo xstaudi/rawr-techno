@@ -9,7 +9,7 @@ var __export = (target, all) => {
 // ableton/stil-track.mjs
 import { execFileSync as execFileSync2, spawnSync as spawnSync2 } from "node:child_process";
 import { existsSync as existsSync3, readFileSync as readFileSync4, renameSync, unlinkSync } from "node:fs";
-import { dirname, join as join3 } from "node:path";
+import { basename as basename2, dirname, join as join3 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -20259,6 +20259,26 @@ async function stilTrack(o) {
     if (o.stumm) stumm("aus");
   }
 }
+async function setSichern(pfad) {
+  ps2("vorne.ps1", ["-Prozess", "Ableton Live*"]);
+  ps2("tippen.ps1", ["-Prozess", "Ableton Live*", "-Tasten", "^+s"]);
+  await new Promise((r) => setTimeout(r, 1500));
+  ps2("speichern-unter.ps1", ["-Pfad", pfad, "-Titel", "*peichern*"]);
+  await new Promise((r) => setTimeout(r, 4e3));
+}
+var NEUVERSUCHE = 2;
+async function stilTrackGeprueft(o, bauen = stilTrack, sichern = setSichern) {
+  const versuche = o.pruefen && !o.nur && o.export !== false && o.seed === void 0 ? NEUVERSUCHE + 1 : 1;
+  let r;
+  for (let n = 1; n <= versuche; n++) {
+    r = await bauen(o);
+    if (r.pruefung_ok !== false || n === versuche) break;
+    log2(r.pruefung);
+    log2(`Neuversuch ${n} von ${NEUVERSUCHE}: Pr\xFCfung au\xDFerhalb, Set gespeichert in ${r.ordner}`);
+    await sichern(join3(r.ordner, basename2(r.ordner)));
+  }
+  return r;
+}
 if (process.argv[1]?.endsWith("stil-track.mjs")) {
   const { values: v, positionals: [stil] } = parseArgs({
     allowPositionals: true,
@@ -20283,7 +20303,7 @@ if (process.argv[1]?.endsWith("stil-track.mjs")) {
     console.error("Aufruf: node ableton/stil-track.mjs <raw|deep|hypnotic> [Optionen]");
     ende(3);
   }
-  stilTrack({ ...v, stil, export: !v["kein-export"] }).then((r) => {
+  stilTrackGeprueft({ ...v, stil, export: !v["kein-export"] }).then((r) => {
     if (r.pegel) console.table(r.pegel);
     if (r.export) log2(`Fertig: ${r.export.datei} (${r.export.lufs} LUFS, True Peak ${r.export.true_peak} dBFS)`);
     else log2(`Fertig: Spuren im offenen Set (${r.spec})`);
@@ -20295,10 +20315,12 @@ if (process.argv[1]?.endsWith("stil-track.mjs")) {
   });
 }
 export {
+  NEUVERSUCHE,
   PEGEL_ZIEL,
   lufsAusText,
   naechsterGain,
   peakBeat,
   stilTrack,
+  stilTrackGeprueft,
   zielPegel
 };

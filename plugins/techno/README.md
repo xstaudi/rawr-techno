@@ -13,7 +13,7 @@ Claude-Code-Plugin für Ableton Live: Einzelsounds, Spuren und ganze Tracks im S
 | „raw kick“, „deep pad in F“, „hypnotic hihat“ | WAV-Datei, die beste von 24 Synthese-Varianten nach Abstand zum Stil-Profil |
 | „hypnotic Kick und Rumble, 16 Takte“ | Spuren als Loop im offenen Live-Set |
 | „raw track“, „deep track mit 7 Minuten“ | neues Set mit Arrangement, Pegeln, Limiter auf das LUFS-Ziel des Stils und WAV-Export |
-| „raw track und prüf ihn“ | dazu die Demucs-Messung des Exports gegen das Profil |
+| „raw track und prüf ihn“ | dazu die Demucs-Messung des Exports gegen das Profil; liegt der Track außerhalb des Stils, baut das Plugin bis zu zweimal mit neuem Zufallswert neu (je etwa 20 Minuten), Fehlversuche bleiben in ihrem Ordner |
 | „öffne techno“ | die Oberfläche im Browser, alles per Klick |
 
 ## Oberfläche
@@ -101,7 +101,7 @@ claude plugin marketplace add xstaudi/rawr-techno
 claude plugin install techno@rawr-techno
 ```
 
-Then tell Claude „set up techno“, select the control surface `ClaudeMixer` in Live, and say „raw kick“, „hypnotic kick and rumble, 16 bars“, „deep track“ or „open techno“ for the browser app.
+Then tell Claude „set up techno“, select the control surface `ClaudeMixer` in Live, and say „raw kick“, „hypnotic kick and rumble, 16 bars“, „deep track“ or „open techno“ for the browser app. „raw track and check it“ measures the export with Demucs; if it lands outside the style, the plugin rebuilds up to twice with a new random seed.
 
 ## Lizenz
 

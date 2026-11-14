@@ -37,5 +37,5 @@ Rollen für `sound`: kick, rumble, hat, openhat, perc, synth, pad. Spuren für `
 - Windows, Ableton Live 11 oder 12 mit deutscher oder englischer Oberfläche. Getestet: Live 11 Intro, deutsch. Englische Dialogtitel sind ungetestet.
 - Intro erlaubt 16 Spuren; ein Track braucht bis zu 7.
 - Die Klänge sind synthetisch (Quelle `synth`). `library` braucht eine eigene, vermessene Sample-Library (`TECHNO_LIBRARY`, Ordner `Kicks/One-Shots`, `HiHats/One-Shots`, …).
-- `pruefen` braucht Demucs (`pip install demucs`); ohne Nvidia-Karte dauert die Prüfung 5–10 min.
+- `pruefen` braucht Demucs (`pip install demucs`); ohne Nvidia-Karte dauert die Prüfung 5–10 min. Liegt der Export außerhalb des Stils, baut `track` ohne festen `seed` bis zu zweimal neu; `status` zeigt die Zeilen „Neuversuch“. Mit festem `seed` gibt es keinen Neuversuch.
 - Die Stil-Profile sind Kennzahlen einer privaten Sammlung (nur Zahlen, keine Tracks oder Namen).
